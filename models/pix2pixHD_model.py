@@ -23,6 +23,7 @@ class Pix2PixHDModel(BaseModel):
         self.isTrain = opt.isTrain
         self.use_features = opt.instance_feat or opt.label_feat
         self.gen_features = self.use_features and not self.opt.load_features
+        self.use_garment = opt.garment
         input_nc = opt.label_nc if opt.label_nc != 0 else opt.input_nc
 
         ##### define networks        
@@ -108,7 +109,7 @@ class Pix2PixHDModel(BaseModel):
             params = list(self.netD.parameters())    
             self.optimizer_D = torch.optim.Adam(params, lr=opt.lr, betas=(opt.beta1, 0.999))
 
-    def encode_input(self, label_map, inst_map=None, real_image=None, feat_map=None, infer=False):             
+    def encode_input(self, label_map, inst_map=None, real_image=None, garment=None, feat_map=None, infer=False):             
         if self.opt.label_nc == 0:
             input_label = label_map.data.cuda()
         else:
@@ -126,6 +127,10 @@ class Pix2PixHDModel(BaseModel):
             edge_map = self.get_edges(inst_map)
             input_label = torch.cat((input_label, edge_map), dim=1)         
         input_label = Variable(input_label, volatile=infer)
+        
+        # real images for training
+        if garment is not None:
+            garment = Variable(garment.data.cuda())
 
         # real images for training
         if real_image is not None:
@@ -139,7 +144,7 @@ class Pix2PixHDModel(BaseModel):
             if self.opt.label_feat:
                 inst_map = label_map.cuda()
 
-        return input_label, inst_map, real_image, feat_map
+        return input_label, inst_map, real_image, garment, feat_map
 
     def discriminate(self, input_label, test_image, use_pool=False):
         input_concat = torch.cat((input_label, test_image.detach()), dim=1)
@@ -149,9 +154,9 @@ class Pix2PixHDModel(BaseModel):
         else:
             return self.netD.forward(input_concat)
 
-    def forward(self, label, inst, image, feat, infer=False):
+    def forward(self, label, inst, image, garment, feat, infer=False):
         # Encode Inputs
-        input_label, inst_map, real_image, feat_map = self.encode_input(label, inst, image, feat)  
+        input_label, inst_map, real_image, garment, feat_map = self.encode_input(label, inst, image, garment, feat)  
 
         # Fake Generation
         if self.use_features:
@@ -160,6 +165,7 @@ class Pix2PixHDModel(BaseModel):
             input_concat = torch.cat((input_label, feat_map), dim=1)                        
         else:
             input_concat = input_label
+            input_concat = torch.cat((input_label, garment), dim=1)
         fake_image = self.netG.forward(input_concat)
 
         # Fake Detection and Loss
