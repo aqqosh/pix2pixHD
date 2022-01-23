@@ -24,6 +24,10 @@ class AlignedDataset(BaseDataset):
             self.dir_inst = os.path.join(opt.dataroot, opt.phase + '_inst')
             self.inst_paths = sorted(make_dataset(self.dir_inst))
 
+        if opt.use_garment:
+            self.garment = os.path.join(opt.dataroot, opt.phase + '_garment')
+            self.garment_path = make_dataset(self.dir_inst)
+        
         ### load precomputed instance-wise encoded features
         if opt.load_features:                              
             self.dir_feat = os.path.join(opt.dataroot, opt.phase + '_feat')
@@ -51,6 +55,13 @@ class AlignedDataset(BaseDataset):
             B = Image.open(B_path).convert('RGB')
             transform_B = get_transform(self.opt, params)      
             B_tensor = transform_B(B)
+            
+        if self.garment_path:
+            garment = Image.open(self.garment_path).convert('RGB')
+            transform_gar = get_transform(self.opt, params) 
+            gar_tensor = transform_gar(garment)
+        else: 
+            gar_tensor = None
 
         ### if using instance maps        
         if not self.opt.no_instance:
@@ -65,7 +76,7 @@ class AlignedDataset(BaseDataset):
                 feat_tensor = norm(transform_A(feat))                            
 
         input_dict = {'label': A_tensor, 'inst': inst_tensor, 'image': B_tensor, 
-                      'feat': feat_tensor, 'path': A_path}
+                      'garment': gar_tensor, 'feat': feat_tensor, 'path': A_path}
 
         return input_dict
 
